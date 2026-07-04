@@ -1,0 +1,427 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "bronze_lakehouse": { "type": "string" },
+    "PowerBIDatasets shelkerohan99": { "type": "string" },
+    "MicrosoftOutlook shelkerohan99": { "type": "string" }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "name": "pl_master_daily_refresh",
+      "type": "pipelines",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "activities": [
+          {
+            "name": "lookup_pipeline_config",
+            "type": "Lookup",
+            "dependsOn": [],
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 0,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
+            "typeProperties": {
+              "source": { "type": "LakehouseTableSource" },
+              "firstRowOnly": false,
+              "datasetSettings": {
+                "annotations": [],
+                "linkedService": {
+                  "name": "bronze_lakehouse",
+                  "properties": {
+                    "annotations": [],
+                    "type": "Lakehouse",
+                    "typeProperties": {
+                      "workspaceId": "84b65c27-4e21-4ea4-b533-06cf9558d4de",
+                      "artifactId": "[parameters('bronze_lakehouse')]",
+                      "rootFolder": "Tables"
+                    }
+                  }
+                },
+                "type": "LakehouseTable",
+                "schema": [],
+                "typeProperties": {
+                  "schema": "dbo",
+                  "table": "pipeline_config"
+                }
+              }
+            }
+          },
+          {
+            "name": "validate_bronze_files",
+            "type": "GetMetadata",
+            "dependsOn": [
+              {
+                "activity": "lookup_pipeline_config",
+                "dependencyConditions": ["Succeeded"]
+              }
+            ],
+            "policy": {
+              "timeout": "0.12:00:00",
+              "retry": 0,
+              "retryIntervalInSeconds": 30,
+              "secureOutput": false,
+              "secureInput": false
+            },
+            "typeProperties": {
+              "fieldList": ["childItems"],
+              "datasetSettings": {
+                "annotations": [],
+                "linkedService": {
+                  "name": "bronze_lakehouse",
+                  "properties": {
+                    "annotations": [],
+                    "type": "Lakehouse",
+                    "typeProperties": {
+                      "workspaceId": "84b65c27-4e21-4ea4-b533-06cf9558d4de",
+                      "artifactId": "[parameters('bronze_lakehouse')]",
+                      "rootFolder": "Files"
+                    }
+                  }
+                },
+                "type": "Binary",
+                "typeProperties": {
+                  "location": {
+                    "type": "LakehouseLocation",
+                    "folderPath": "raw/orders"
+                  }
+                }
+              },
+              "storeSettings": {
+                "type": "LakehouseReadSettings",
+                "recursive": true,
+                "enablePartitionDiscovery": false
+              },
+              "formatSettings": { "type": "BinaryReadSettings" }
+            }
+          },
+          {
+            "name": "check_files_exist",
+            "type": "IfCondition",
+            "dependsOn": [
+              {
+                "activity": "validate_bronze_files",
+                "dependencyConditions": ["Succeeded"]
+              }
+            ],
+            "typeProperties": {
+              "expression": {
+                "value": "@greater(length(activity('validate_bronze_files').output.childItems), 0)",
+                "type": "Expression"
+              },
+              "ifFalseActivities": [
+                {
+                  "name": "fail_no_source_files",
+                  "type": "Fail",
+                  "dependsOn": [],
+                  "typeProperties": {
+                    "message": {
+                      "value": "@concat('No source files found in Bronze at ', utcNow(), '. Pipeline aborted.')",
+                      "type": "Expression"
+                    },
+                    "errorCode": "PIPELINE_FAILED"
+                  }
+                }
+              ],
+              "ifTrueActivities": [
+                {
+                  "name": "silver_orders",
+                  "type": "TridentNotebook",
+                  "dependsOn": [],
+                  "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "notebookId": "124faeec-8a32-4434-85f5-fad525feb5c1",
+                    "workspaceId": "84b65c27-4e21-4ea4-b533-06cf9558d4de",
+                    "parameters": {
+                      "load_date": {
+                        "value": {
+                          "value": "@pipeline().parameters.p_load_date",
+                          "type": "Expression"
+                        },
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "silver_customers",
+                  "type": "TridentNotebook",
+                  "dependsOn": [],
+                  "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "notebookId": "6eec5731-28e9-451a-b9bb-d982609fd2ca",
+                    "workspaceId": "84b65c27-4e21-4ea4-b533-06cf9558d4de",
+                    "parameters": {
+                      "load_date": {
+                        "value": {
+                          "value": "@pipeline().parameters.p_load_date",
+                          "type": "Expression"
+                        },
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "silver_products",
+                  "type": "TridentNotebook",
+                  "dependsOn": [],
+                  "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "notebookId": "9e9058b3-70cb-49a8-8b7c-9dc2be9c1bec",
+                    "workspaceId": "84b65c27-4e21-4ea4-b533-06cf9558d4de",
+                    "parameters": {
+                      "load_date": {
+                        "value": {
+                          "value": "@pipeline().parameters.p_load_date",
+                          "type": "Expression"
+                        },
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "gold_star_schema",
+                  "type": "TridentNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "silver_orders",
+                      "dependencyConditions": ["Succeeded"]
+                    },
+                    {
+                      "activity": "silver_customers",
+                      "dependencyConditions": ["Succeeded"]
+                    },
+                    {
+                      "activity": "silver_products",
+                      "dependencyConditions": ["Succeeded"]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "notebookId": "b0d755d3-5a80-4c6d-8703-1ff576e5f3eb",
+                    "workspaceId": "84b65c27-4e21-4ea4-b533-06cf9558d4de",
+                    "parameters": {
+                      "load_date": {
+                        "value": {
+                          "value": "@pipeline().parameters.p_load_date",
+                          "type": "Expression"
+                        },
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "refresh_semantic_model",
+                  "type": "PBISemanticModelRefresh",
+                  "dependsOn": [
+                    {
+                      "activity": "gold_star_schema",
+                      "dependencyConditions": ["Succeeded"]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "method": "POST",
+                    "operationType": "SemanticModelRefresh",
+                    "groupId": "84b65c27-4e21-4ea4-b533-06cf9558d4de",
+                    "datasetId": "f81cd0a5-b7ed-4781-9cf2-3ab646007448",
+                    "objects": [],
+                    "waitOnCompletion": true,
+                    "commitMode": "Transactional"
+                  },
+                  "externalReferences": {
+                    "connection": "[parameters('PowerBIDatasets shelkerohan99')]"
+                  }
+                },
+                {
+                  "name": "notify_success",
+                  "type": "Office365Email",
+                  "dependsOn": [
+                    {
+                      "activity": "refresh_semantic_model",
+                      "dependencyConditions": ["Succeeded"]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "to": {
+                      "value": "your-email@company.com",
+                      "type": "Expression"
+                    },
+                    "subject": {
+                      "value": "✅ RetailPulse Pipeline Success - @{formatDateTime(utcNow(), 'dd-MMM-yyyy')}",
+                      "type": "Expression"
+                    },
+                    "body": "Pipeline: @{pipeline().Pipeline}\n\nStatus: SUCCESS\n\nCompleted at: @{utcNow()}\n\nRun ID: @{pipeline().RunId}\n\nAll stages completed successfully:\n\n✅ Bronze validation\n✅ Silver transformation (Orders, Customers, Products)\n✅ Gold Star Schema built\n✅ Semantic Model refreshed\n\nDashboard is ready for business users."
+                  },
+                  "externalReferences": {
+                    "connection": "[parameters('MicrosoftOutlook shelkerohan99')]"
+                  }
+                },
+                {
+                  "name": "gold_schema_failure",
+                  "type": "Fail",
+                  "dependsOn": [
+                    {
+                      "activity": "gold_star_schema",
+                      "dependencyConditions": ["Failed"]
+                    }
+                  ],
+                  "typeProperties": {
+                    "message": {
+                      "value": "Subject: ❌ RetailPulse Pipeline FAILED - @{formatDateTime(utcNow(), 'dd-MMM-yyyy')}\n\nBody:\nPipeline: @{pipeline().Pipeline}\nFailed Activity: @{pipeline().Pipeline}\nError: @{activity('gold_star_schema').error.message}\nTime: @{utcNow()}\nRun ID: @{pipeline().RunId}\n\nACTION REQUIRED:\n1. Open Fabric Monitor Hub\n2. Find run ID above\n3. Check failed activity error details\n4. Fix and rerun from failed activity\n\nDashboard may show stale data until resolved.",
+                      "type": "Expression"
+                    },
+                    "errorCode": "PIPELINE_FAILED"
+                  }
+                },
+                {
+                  "name": "sm_failure",
+                  "type": "Fail",
+                  "dependsOn": [
+                    {
+                      "activity": "refresh_semantic_model",
+                      "dependencyConditions": ["Failed"]
+                    }
+                  ],
+                  "typeProperties": {
+                    "message": {
+                      "value": "Subject: ❌ RetailPulse Pipeline FAILED - @{formatDateTime(utcNow(), 'dd-MMM-yyyy')}\n\nBody:\nPipeline: @{pipeline().Pipeline}\nFailed Activity: @{pipeline().Pipeline}\nError: @{activity('refresh_semantic_model').error.message}\nTime: @{utcNow()}\nRun ID: @{pipeline().RunId}\n\nACTION REQUIRED:\n1. Open Fabric Monitor Hub\n2. Find run ID above\n3. Check failed activity error details\n4. Fix and rerun from failed activity\n\nDashboard may show stale data until resolved.activity('refresh_semantic_model').output",
+                      "type": "Expression"
+                    },
+                    "errorCode": "PIPELINE_FAILED"
+                  }
+                },
+                {
+                  "name": "silver_products_failure",
+                  "type": "Fail",
+                  "dependsOn": [
+                    {
+                      "activity": "silver_products",
+                      "dependencyConditions": ["Failed"]
+                    }
+                  ],
+                  "typeProperties": {
+                    "message": {
+                      "value": "Subject: ❌ RetailPulse Pipeline FAILED - @{formatDateTime(utcNow(), 'dd-MMM-yyyy')}\n\nBody:\nPipeline: @{pipeline().Pipeline}\nFailed Activity: @{pipeline().Pipeline}\nError: @{activity('silver_products').error.message}\nTime: @{utcNow()}\nRun ID: @{pipeline().RunId}\n\nACTION REQUIRED:\n1. Open Fabric Monitor Hub\n2. Find run ID above\n3. Check failed activity error details\n4. Fix and rerun from failed activity\n\nDashboard may show stale data until resolved.",
+                      "type": "Expression"
+                    },
+                    "errorCode": "PIPELINE_FAILED"
+                  }
+                },
+                {
+                  "name": "silver_customers_failure",
+                  "type": "Fail",
+                  "dependsOn": [
+                    {
+                      "activity": "silver_customers",
+                      "dependencyConditions": ["Failed"]
+                    }
+                  ],
+                  "typeProperties": {
+                    "message": {
+                      "value": "Subject: ❌ RetailPulse Pipeline FAILED - @{formatDateTime(utcNow(), 'dd-MMM-yyyy')}\n\nBody:\nPipeline: @{pipeline().Pipeline}\nFailed Activity: @{pipeline().Pipeline}\nError: @{activity('silver_customers').error.message}\nTime: @{utcNow()}\nRun ID: @{pipeline().RunId}\n\nACTION REQUIRED:\n1. Open Fabric Monitor Hub\n2. Find run ID above\n3. Check failed activity error details\n4. Fix and rerun from failed activity\n\nDashboard may show stale data until resolved.",
+                      "type": "Expression"
+                    },
+                    "errorCode": "PIPELINE_FAILED"
+                  }
+                },
+                {
+                  "name": "silver_order_failure",
+                  "type": "Fail",
+                  "dependsOn": [
+                    {
+                      "activity": "silver_orders",
+                      "dependencyConditions": ["Failed"]
+                    }
+                  ],
+                  "typeProperties": {
+                    "message": {
+                      "value": "Subject: ❌ RetailPulse Pipeline FAILED - @{formatDateTime(utcNow(), 'dd-MMM-yyyy')}\n\nBody:\nPipeline: @{pipeline().Pipeline}\nFailed Activity: @{pipeline().Pipeline}\nError: @{activity('silver_orders').error.message}\nTime: @{utcNow()}\nRun ID: @{pipeline().RunId}\n\nACTION REQUIRED:\n1. Open Fabric Monitor Hub\n2. Find run ID above\n3. Check failed activity error details\n4. Fix and rerun from failed activity\n\nDashboard may show stale data until resolved.",
+                      "type": "Expression"
+                    },
+                    "errorCode": "PIPELINE_FAILED"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "notify_failure",
+            "type": "Fail",
+            "dependsOn": [
+              {
+                "activity": "validate_bronze_files",
+                "dependencyConditions": ["Failed"]
+              }
+            ],
+            "typeProperties": {
+              "message": {
+                "value": "Subject: ❌ RetailPulse Pipeline FAILED - @{formatDateTime(utcNow(), 'dd-MMM-yyyy')}\n\nBody:\nPipeline: @{pipeline().Pipeline}\nFailed Activity: @{pipeline().Pipeline}\nError: @{activity('validate_bronze_files').error.message}\nTime: @{utcNow()}\nRun ID: @{pipeline().RunId}\n\nACTION REQUIRED:\n1. Open Fabric Monitor Hub\n2. Find run ID above\n3. Check failed activity error details\n4. Fix and rerun from failed activity\n\nDashboard may show stale data until resolved.",
+                "type": "Expression"
+              },
+              "errorCode": "PIPELINE_FAILED"
+            }
+          }
+        ],
+        "parameters": {
+          "p_load_date": {
+            "type": "string",
+            "defaultValue": "@formatDateTime(utcNow(), 'yyyy-MM-dd')"
+          },
+          "p_environment": { "type": "string", "defaultValue": "dev" },
+          "p_notify_email": {
+            "type": "string",
+            "defaultValue": "abc@7309@gmail.com"
+          }
+        },
+        "lastModifiedByObjectId": "7dc6fa3b-c647-47dc-beb1-6b1bf0e24f9e",
+        "lastPublishTime": "2026-07-04T20:23:59Z"
+      },
+      "dependsOn": []
+    }
+  ]
+}
