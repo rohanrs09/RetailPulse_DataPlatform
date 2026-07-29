@@ -127,6 +127,12 @@ Pipeline flow, Power BI dashboard, and architecture diagrams are in the `SS/` fo
   <img src="SS/pipeline_monitoring.png" width="1000">
 </p>
 
+# END TO END WORKFLOW
+
+<p align="center">
+  <img src="SS/WhatsApp Image 2026-07-29 at 21.29.40.jpeg" width="1000">
+</p>
+
 
 
 ## Key Problems Solved
