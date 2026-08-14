@@ -130,7 +130,7 @@ Pipeline flow, Power BI dashboard, and architecture diagrams are in the `SS/` fo
 # END TO END WORKFLOW
 
 <p align="center">
-  <img src="SS/WhatsApp Image 2026-07-29 at 21.29.40.jpeg" width="1000">
+  <img src="SS/E2E_retail.png" width="1000">
 </p>
 
 
